@@ -1,0 +1,23 @@
+- name: Format HDFS namenode
+  shell: yes | hdfs namenode -format > /tmp/format_namenode.log 2>&1
+  become: yes
+
+# After executing shell command, ansible will send SIGHUP to remote server
+# If don't specify nohup here, hadoop will stop because of SIGHUP
+- name: Start HDFS and wait for it to start
+  shell: |
+    nohup /opt/hadoop/sbin/start-dfs.sh > /tmp/start_dfs.log 2>&1 &
+    sleep 5
+  become: yes
+
+- name: Start YARN and wait for it to start
+  shell: |
+    nohup /opt/hadoop/sbin/start-yarn.sh > /tmp/start_yarn.log 2>&1 &
+    sleep 5
+  become: yes
+
+- name: Start historyserver and wait for it to start
+  shell: |
+    nohup /opt/hadoop/bin/mapred --daemon start historyserver > /tmp/start_historyserver.log 2>&1 &
+    sleep 2
+  become: yes

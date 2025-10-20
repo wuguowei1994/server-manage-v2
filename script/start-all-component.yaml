@@ -1,0 +1,30 @@
+---
+- name: Ensure Zookeeper server is running
+  hosts: all
+  become: yes
+  tasks:
+    - name: Check Zookeeper server status
+      command: /opt/zookeeper/bin/zkServer.sh status
+      register: zk_status
+      ignore_errors: yes
+
+    - name: Start Zookeeper server if not running
+      command: /opt/zookeeper/bin/zkServer.sh start
+      when: zk_status.rc != 0
+
+    - name: Check if Kafka process is running
+      command: pgrep -f 'kafka.Kafka'
+      register: kafka_process
+      ignore_errors: yes
+
+    - name: Start Kafka if not running
+      command: /opt/kafka/bin/kafka-server-start.sh -daemon /opt/kafka/config/server.properties
+      when: kafka_process.rc != 0
+
+    - name: Start hadoop
+      shell: |
+        start-dfs.sh
+        start-yarn.sh
+        mapred --daemon start historyserver
+      when: ansible_default_ipv4.address == '68.183.62.71'
+      ignore_errors: yes

@@ -1,0 +1,61 @@
+---
+- name: Install Spark
+  hosts: all
+  become: yes
+  tasks:
+    - name: Set environment variables in .bashrc
+      lineinfile:
+        path: /root/.bashrc
+        line: "{{ item }}"
+        state: present
+      loop:
+        - 'export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop'
+        - 'export SPARK_HOME=/opt/spark'
+        - 'export PATH=$PATH:/opt/spark/bin'
+        - 'export LD_LIBRARY_PATH=$HADOOP_HOME/lib/native:$LD_LIBRARY_PATH'
+
+    - name: Download spark-3.3.1-bin-hadoop3.tgz
+      get_url:
+        url: https://archive.apache.org/dist/spark/spark-3.3.1/spark-3.3.1-bin-hadoop3.tgz
+        dest: /root/download-jar/spark-3.3.1-bin-hadoop3.tgz
+
+    - name: Extract spark
+      unarchive:
+        src: /root/download-jar/spark-3.3.1-bin-hadoop3.tgz
+        dest: /opt/
+        remote_src: yes
+        extra_opts: [ --transform, 's/spark-3.3.1-bin-hadoop3/spark/' ]
+
+    - name: Set ownership for spark directory
+      file:
+        path: /opt/spark
+        owner: root
+        group: root
+        recurse: yes
+        state: directory
+
+    - name: Set workers file
+      copy:
+        dest: /opt/spark/conf/workers
+        content: |
+          165.22.40.133
+          165.227.124.190
+
+    - name: Config spark-env.sh
+      template:
+        src: ../config/spark-env.sh
+        dest: /opt/spark/conf/
+
+    - name: Copy spark-defaults.conf
+      copy:
+        src: ../config/spark-defaults.conf
+        dest: /opt/spark/conf/
+
+    - name: Create hdfs folder for spark logs
+      shell: hdfs dfs -mkdir hdfs://68.183.62.71:7000/spark-logs
+      when: ansible_default_ipv4.address == '68.183.62.71'
+
+    - name: Start spark historyserver
+      shell: |
+        nohup /opt/spark/sbin/start-history-server.sh > /tmp/spark_historyserver.log 2>&1 &
+      when: ansible_default_ipv4.address == '68.183.62.71'

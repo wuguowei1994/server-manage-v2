@@ -1,0 +1,23 @@
+- name: Check MySQL status
+  command: systemctl is-active mysqld
+  register: mysql_status
+  ignore_errors: yes
+
+- name: Check HDFS status
+  command: jps | grep -q NameNode || echo "HDFS not running"
+  register: hdfs_status
+  ignore_errors: yes
+
+- name: Check Zookeeper status
+  command: systemctl is-active zookeeper
+  register: zookeeper_status
+  ignore_errors: yes
+
+- name: Fail if any service is not running
+  fail:
+    msg: >
+      MySQL status: {{ mysql_status.stdout }},
+      HDFS status: {{ hdfs_status.stdout }},
+      Zookeeper status: {{ zookeeper_status.stdout }}.
+      One or more services are not running!
+  when: mysql_status.stdout != "active" or hdfs_status.stdout != "" or zookeeper_status.stdout != "active"

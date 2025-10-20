@@ -1,0 +1,100 @@
+---
+- name: Install Druid Data
+  become: yes
+  hosts: all
+  tasks:
+    - name: Check MySQL login
+      command: mysql --host=68.183.62.71 --user=druid --password=m27EbXfV7K#y#ePG --database=druid -e "SELECT 1;"
+      register: mysql_login_check
+      ignore_errors: yes
+
+    - name: Fail if MySQL login failed
+      fail:
+        msg: "MySQL login failed: {{ mysql_login_check.stderr }}"
+      when: mysql_login_check.rc != 0
+
+    - name: Download Apache Druid tarball
+      get_url:
+        url: https://archive.apache.org/dist/druid/28.0.0/apache-druid-28.0.0-bin.tar.gz
+        dest: /root/download-jar/apache-druid-28.0.0-bin.tar.gz
+        mode: 0644
+
+    - name: Extract Apache Druid
+      unarchive:
+        src: /root/download-jar/apache-druid-28.0.0-bin.tar.gz
+        dest: /opt/
+        remote_src: yes
+        extra_opts:
+          - '--transform'
+          - 's/apache-druid-28.0.0/druid-data/'
+
+    - name: Download MySQL Connector
+      get_url:
+        url: https://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.49/mysql-connector-java-5.1.49.jar
+        dest: /root/download-jar/mysql-connector-java-5.1.49.jar
+        mode: 0644
+
+    - name: Copy MySQL Connector JAR to Druid extensions directory
+      copy:
+        src: /root/download-jar/mysql-connector-java-5.1.49.jar
+        dest: /opt/druid-data/extensions/mysql-metadata-storage/
+        remote_src: yes
+
+    - name: Change ownership of /opt/druid-data directory
+      file:
+        path: /opt/druid-data
+        owner: root
+        group: root
+        recurse: yes
+        state: directory
+
+    - name: Remove Druid cluster and single-server configuration files
+      file:
+        path: /opt/druid-data/conf/druid
+        state: absent
+
+    - name: Copy data-cluster configuration files to remote
+      copy:
+        src: ../data-cluster/
+        dest: /opt/druid-data/conf/druid/cluster/
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Copy Hadoop configuration
+      copy:
+        src: /opt/hadoop/etc/hadoop/{{ item }}
+        dest: /opt/druid-data/conf/druid/cluster/_common/{{ item }}
+        owner: root
+        group: root
+        mode: '0644'
+        remote_src: yes
+      with_items:
+        - core-site.xml
+        - hdfs-site.xml
+        - mapred-site.xml
+        - yarn-site.xml
+
+    - name: Copy runtime.properties files to remote
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: ../data-cluster/_common/common.runtime.properties, dest: /opt/druid-data/conf/druid/cluster/_common/common.runtime.properties }
+        - { src: ../data-cluster/data/historical/runtime.properties, dest: /opt/druid-data/conf/druid/cluster/data/historical/runtime.properties }
+        - { src: ../data-cluster/data/middleManager/runtime.properties, dest: /opt/druid-data/conf/druid/cluster/data/middleManager/runtime.properties }
+
+    - name: Upload druid scripts
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: '0755'
+      with_items:
+        - { src: ../scripts/druid-stop.sh, dest: /root/druid-stop.sh }
+        - { src: ../scripts/druid-start.sh, dest: /root/druid-start.sh }
+      when: ansible_default_ipv4.address == '68.183.62.71'
+
+    - name: Start Druid data
+      shell: nohup bin/start-cluster-data-server > /tmp/start_druid_data.log 2>&1 &
+      args:
+        chdir: /opt/druid-data

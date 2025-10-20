@@ -1,0 +1,12 @@
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'owYYGLT14,';
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+CREATE USER 'root'@'centos-01' IDENTIFIED WITH mysql_native_password BY 'owYYGLT14,';
+CREATE USER 'root'@'centos-02' IDENTIFIED WITH mysql_native_password BY 'owYYGLT14,';
+CREATE USER 'root'@'centos-03' IDENTIFIED WITH mysql_native_password BY 'owYYGLT14,';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'centos-01' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'centos-02' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'centos-03' WITH GRANT OPTION;
+FLUSH PRIVILEGES;

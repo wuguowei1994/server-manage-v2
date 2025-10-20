@@ -1,0 +1,62 @@
+- name: Create Druid database
+  mysql_db:
+    name: druid
+    state: present
+    login_user: root
+    login_password: owYYGLT14,
+
+- name: Set database character set and collation
+  mysql_query:
+    query: "ALTER DATABASE druid CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    login_user: root
+    login_password: owYYGLT14,
+
+- name: Create MySQL user 'druid'@'68.183.62.71'
+  mysql_user:
+    name: druid
+    password: m27EbXfV7K#y#ePG
+    host: 68.183.62.71
+    priv: "druid.*:ALL"
+    state: present
+    login_user: root
+    login_password: owYYGLT14,
+
+- name: Create MySQL user 'druid'@'165.22.40.133'
+  mysql_user:
+    name: druid
+    password: m27EbXfV7K#y#ePG
+    host: 165.22.40.133
+    priv: "druid.*:ALL"
+    state: present
+    login_user: root
+    login_password: owYYGLT14,
+
+- name: Create MySQL user 'druid'@'165.227.124.190'
+  mysql_user:
+    name: druid
+    password: m27EbXfV7K#y#ePG
+    host: 165.227.124.190
+    priv: "druid.*:ALL"
+    state: present
+    login_user: root
+    login_password: owYYGLT14,
+
+- name: Create MySQL user 'druid'@'localhost'
+  mysql_user:
+    name: druid
+    password: m27EbXfV7K#y#ePG
+    host: localhost
+    priv: "druid.*:ALL"
+    state: present
+    login_user: root
+    login_password: owYYGLT14,
+
+- name: Create MySQL user 'druid'@'centos-01'
+  mysql_user:
+    name: druid
+    password: m27EbXfV7K#y#ePG
+    host: centos-01
+    priv: "druid.*:ALL"
+    state: present
+    login_user: root
+    login_password: owYYGLT14,

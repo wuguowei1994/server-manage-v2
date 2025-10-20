@@ -1,0 +1,77 @@
+---
+- name: Install elasticsearch
+  become: yes
+  hosts: all
+  tasks:
+    - name: Download Elasticsearch tarball
+      get_url:
+        url: https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.8.8.tar.gz
+        dest: /root/download-jar/elasticsearch-6.8.8.tar.gz
+
+    - name: Download Kibana tarball
+      get_url:
+        url: https://artifacts.elastic.co/downloads/kibana/kibana-6.8.8-linux-x86_64.tar.gz
+        dest: /root/download-jar/kibana-6.8.8-linux-x86_64.tar.gz
+
+    - name: Extract Elasticsearch and Kibana
+      unarchive:
+        src: "{{ item.src }}"
+        dest: /opt/
+        remote_src: yes
+        extra_opts:
+          - '--transform'
+          - "{{ item.transform }}"
+      loop:
+        - { src: /root/download-jar/elasticsearch-6.8.8.tar.gz, transform: 's/^elasticsearch-6.8.8/elasticsearch/' }
+        - { src: /root/download-jar/kibana-6.8.8-linux-x86_64.tar.gz, transform: 's/^kibana-6.8.8-linux-x86_64/kibana/' }
+
+    - name: Copy crack and plugin files
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+      with_items:
+        - { src: '../jars/x-pack-core-6.8.8.jar', dest: '/opt/elasticsearch/modules/x-pack-core/x-pack-core-6.8.8.jar' }
+        - { src: '../jars/license.json', dest: '/opt/elasticsearch/' }
+        - { src: '../config/jvm.options', dest: '/opt/elasticsearch/config/jvm.options' }
+
+    - name: Ensure elasticsearch group exists
+      group:
+        name: elasticsearch
+        state: present
+
+    - name: Ensure elasticsearch user exists
+      user:
+        name: elasticsearch
+        group: elasticsearch
+        shell: /sbin/nologin
+        system: yes
+        state: present
+
+    - name: Copy config files to remote
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: '../config/elasticsearch.yml', dest: '/opt/elasticsearch/config/elasticsearch.yml' }
+        - { src: '../config/kibana.yml', dest: '/opt/kibana/config/kibana.yml' }
+
+    - name: Create elasticsearch keystore and add bootstrap.password
+      shell: |
+        /opt/elasticsearch/bin/elasticsearch-keystore create
+        printf "+4=V22SwwUTROe0rtEAI" | /opt/elasticsearch/bin/elasticsearch-keystore add "bootstrap.password" -x
+      args:
+        creates: /opt/elasticsearch/config/elasticsearch.keystore
+
+    - name: Ensure ownership of Elasticsearch and Kibana directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        recurse: yes
+      with_items:
+        - /opt/elasticsearch
+        - /opt/kibana

@@ -1,0 +1,37 @@
+-Xms2g
+-Xmx2g
+-XX:MaxDirectMemorySize=512m
+
+-XX:+UseG1GC
+-XX:G1ReservePercent=25
+-XX:InitiatingHeapOccupancyPercent=30
+-XX:+AlwaysPreTouch
+-Xss1m
+-Djava.awt.headless=true
+-Dfile.encoding=UTF-8
+-Djna.nosys=true
+-XX:-OmitStackTraceInFastThrow
+-Dio.netty.noUnsafe=true
+-Dio.netty.noKeySetOptimization=true
+-Dio.netty.recycler.maxCapacityPerThread=0
+-Dlog4j.shutdownHookEnabled=false
+-Dlog4j2.disable.jmx=true
+
+-Djava.io.tmpdir=${ES_TMPDIR}
+
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:+ExitOnOutOfMemoryError
+-XX:HeapDumpPath=data
+-XX:ErrorFile=logs/hs_err_pid%p.log
+
+-Des.networkaddress.cache.negative.ttl=10
+
+-XX:+UnlockDiagnosticVMOptions
+-XX:+PrintFlagsFinal
+
+# JDK 9+ GC logging
+9-:-Xlog:gc*,gc+age=trace,safepoint:file=logs/gc.log:utctime,pid,tags:filecount=32,filesize=64m
+
+# workaround G1 bug, see https://bugs.openjdk.org/browse/JDK-8329528
+22:-XX:+UnlockDiagnosticVMOptions
+22:-XX:G1NumCollectionsKeepPinned=10000000

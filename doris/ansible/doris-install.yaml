@@ -1,0 +1,72 @@
+---
+- name: Install Doris
+  become: yes
+  hosts: all
+  tasks:
+    - name: Download Doris tarball
+      get_url:
+        url: https://apache-doris-releases.oss-accelerate.aliyuncs.com/apache-doris-2.0.15.1-bin-x64.tar.gz
+        dest: /root/download-jar/apache-doris-2.0.15.1-bin-x64.tar.gz
+
+    - name: Extract Doris
+      unarchive:
+        src: /root/download-jar/apache-doris-2.0.15.1-bin-x64.tar.gz
+        dest: /opt/
+        remote_src: yes
+        extra_opts: [--transform, 's/apache-doris-2.0.15.1-bin-x64/doris/']
+
+    - name: Append configuration to Doris config files
+      blockinfile:
+        path: "{{ item }}"
+        block: |
+          lower_case_table_names = 1
+          JAVA_HOME=/opt/jdk1.8.0_341
+        state: present
+      with_items:
+        - /opt/doris/fe/conf/fe.conf
+        - /opt/doris/be/conf/be.conf
+
+    - name: Replace 8030 with 8070 in fe.conf
+      replace:
+        path: /opt/doris/fe/conf/fe.conf
+        regexp: '8030'
+        replace: '8070'
+
+    - name: Replace 8040 with 8050 in be.conf
+      replace:
+        path: /opt/doris/be/conf/be.conf
+        regexp: '8040'
+        replace: '8050'
+
+    - name: Copy auditloader zip
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+      with_items:
+        - { src: '../jars/auditloader.zip', dest: '/opt/doris/extensions/audit_loader/auditloader.zip' }
+
+    - name: Copy Hadoop config files to Doris conf directories
+      copy:
+        src: "{{ item.key }}"
+        dest: "{{ item.value }}"
+        remote_src: yes
+      with_items:
+        - { key: '/opt/hadoop/etc/hadoop/core-site.xml', value: '/opt/doris/fe/conf/' }
+        - { key: '/opt/hadoop/etc/hadoop/hdfs-site.xml', value: '/opt/doris/be/conf/' }
+
+    - name: Start Doris FE
+      when: ansible_default_ipv4.address == '68.183.62.71'
+      shell: |
+        nohup /opt/doris/fe/bin/start_fe.sh --daemon > /tmp/start_doris_fe.log 2>&1 &
+        sleep 5
+      become: yes
+
+    - name: Start Doris BE
+      when: ansible_default_ipv4.address != '68.183.62.71'
+      shell: |
+        nohup /opt/doris/be/bin/start_be.sh --daemon > /tmp/start_doris_be.log 2>&1 &
+        sleep 5
+      become: yes
