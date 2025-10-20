@@ -1,0 +1,12 @@
+- name: Remove old data in datanode
+  shell: |
+    rm -rf /opt/hadoop/data/dataNode
+  become: yes
+  when: ansible_default_ipv4.address != '68.183.62.71'
+
+- name: Stop historyserver and wait for it to stop
+  shell: |
+    nohup /opt/hadoop/bin/mapred --daemon stop historyserver > /tmp/stop_historyserver.log 2>&1 &
+    sleep 3
+  become: yes
+  when: ansible_default_ipv4.address == '68.183.62.71'

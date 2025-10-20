@@ -1,0 +1,58 @@
+---
+- name: Set up Zookeeper
+  hosts: all
+  become: yes
+  tasks:
+    - name: Download apache-zookeeper-3.7.1-bin.tar.gz
+      get_url:
+        url: https://archive.apache.org/dist/zookeeper/zookeeper-3.7.1/apache-zookeeper-3.7.1-bin.tar.gz
+        dest: /root/download-jar/apache-zookeeper-3.7.1-bin.tar.gz
+        mode: '0644'
+
+    - name: Extract apache-zookeeper-3.7.1-bin.tar.gz
+      unarchive:
+        src: /root/download-jar/apache-zookeeper-3.7.1-bin.tar.gz
+        dest: /opt/
+        remote_src: yes
+        extra_opts: [--transform, 's/apache-zookeeper-3.7.1-bin/zookeeper/']
+        creates: /opt/zookeeper
+
+    - name: Create directory /opt/zookeeper/data
+      file:
+        path: /opt/zookeeper/data
+        state: directory
+        mode: '0755'
+
+    - name: Upload zoo.cfg
+      copy:
+        src: ../config/zoo.cfg
+        dest: /opt/zookeeper/conf/zoo.cfg
+
+    - name: Set myid based on host
+      copy:
+        content: "{{ myid }}"
+        dest: /opt/zookeeper/data/myid
+
+    - name: Ensure the Zookeeper bin directory is in the PATH
+      lineinfile:
+        path: /etc/profile
+        regexp: '^export PATH=.*:/opt/zookeeper/bin$'
+        line: 'export PATH=$PATH:/opt/zookeeper/bin'
+        state: present
+
+    - name: Start Zookeeper
+      command: /opt/zookeeper/bin/zkServer.sh start
+
+    - name: Pause for 2 seconds
+      pause:
+        seconds: 2
+
+    - name: Check and print Zookeeper status
+      command: /opt/zookeeper/bin/zkServer.sh status
+      register: zk_status
+      changed_when: false
+      failed_when: "'ERROR' in zk_status.stderr or zk_status.rc != 0"
+
+    - name: Print Zookeeper status
+      debug:
+        msg: "{{ zk_status.stdout }}"

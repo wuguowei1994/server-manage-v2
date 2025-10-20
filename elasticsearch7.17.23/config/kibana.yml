@@ -1,0 +1,4 @@
+server.host: "0.0.0.0"
+elasticsearch.hosts: ["http://{{ ansible_host }}:9200"]
+elasticsearch.username: "elastic"
+elasticsearch.password: "+4=V22SwwUTROe0rtEAI"

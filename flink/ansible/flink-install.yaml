@@ -1,0 +1,71 @@
+---
+- name: Install Flink And Paimon
+  hosts: all
+  become: yes
+  vars:
+    flink_url: "https://archive.apache.org/dist/flink/flink-1.18.0/flink-1.18.0-bin-scala_2.12.tgz"
+    jars:
+      - { url: "https://repository.apache.org/content/groups/snapshots/org/apache/paimon/paimon-flink-1.18/1.0-SNAPSHOT/paimon-flink-1.18-1.0-20241224.081503-85.jar", dest: "/opt/flink/lib" }
+      - { url: "https://repository.apache.org/content/groups/snapshots/org/apache/paimon/paimon-flink-action/1.0-SNAPSHOT/paimon-flink-action-1.0-20241224.081503-85.jar", dest: "/opt/flink/lib" }
+      - { url: "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.3.0/kafka-clients-3.3.0.jar", dest: "/opt/flink/lib" }
+      - { url: "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.2.0-1.18/flink-sql-connector-kafka-3.2.0-1.18.jar", dest: "/opt/flink/lib" }
+      - { url: "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-mysql-cdc/3.1.1/flink-sql-connector-mysql-cdc-3.1.1.jar", dest: "/opt/flink/lib" }
+      - { url: "https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.27/mysql-connector-java-8.0.27.jar", dest: "/opt/flink/lib" }
+      - { url: "https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-elasticsearch6/3.0.1-1.16/flink-sql-connector-elasticsearch6-3.0.1-1.16.jar", dest: "/opt/flink/lib" }
+      - { url: "https://repo1.maven.org/maven2/org/jline/jline/3.21.0/jline-3.21.0.jar", dest: "/opt/flink/lib" }
+      - { url: "https://repo1.maven.org/maven2/org/apache/flink/flink-connector-jdbc/3.2.0-1.18/flink-connector-jdbc-3.2.0-1.18.jar", dest: "/opt/flink/lib" }
+
+  tasks:
+    - name: Download Flink tarball
+      get_url:
+        url: "{{ flink_url }}"
+        dest: "/root/download-jar/flink-1.18.0-bin-scala_2.12.tgz"
+
+    - name: Extract Flink tarball
+      unarchive:
+        src: "/root/download-jar/flink-1.18.0-bin-scala_2.12.tgz"
+        dest: /opt/
+        remote_src: yes
+        extra_opts: [--transform, 's/flink-1.18.0/flink/']
+
+    - name: Remove jline-3.9.0.jar
+      file:
+        path: /opt/flink/lib/jline-3.9.0.jar
+        state: absent
+
+    - name: Download additional jars to /opt/flink/lib
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+      loop: "{{ jars }}"
+
+    - name: Create sql-client-defaults.yaml with specified content
+      copy:
+        dest: /opt/flink/conf/sql-client-defaults.yaml
+        content: |
+          execution:
+            target: yarn-session
+            yarn.application.id: application_123
+        mode: '0644'
+
+    - name: Create flink-conf.yaml with specified content
+      copy:
+        dest: /opt/flink/conf/flink-conf.yaml
+        content: |
+          yarn.containers.vcores: 1
+          jobmanager.memory.process.size: 1024m
+          taskmanager.memory.process.size: 1024m
+          taskmanager.numberOfTaskSlots: 1
+          table.exec.sink.upsert-materialize: NONE
+          env.java.opts.all: -Dfile.encoding=UTF-8
+          rest.port: 37275
+        mode: '0644'
+
+    - name: Upload flink scripts
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: '0755'
+      with_items:
+        - { src: ../scripts/flink-start.sh, dest: /root/flink-start.sh }
+        - { src: ../scripts/flink-stop.sh, dest: /root/flink-stop.sh }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- path: /opt/hadoop/etc/hadoop/core-site.xml -->
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <property>
+        <!-- define default URI, it's HDFS path prefix -->
+        <name>fs.defaultFS</name>
+        <value>hdfs://68.183.62.71:7000</value>
+    </property>
+    <!-- default web ui port is 9870, it's no bussiness with fs.defaultFS -->
+</configuration>

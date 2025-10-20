@@ -1,0 +1,55 @@
+---
+- name: Install Prometheus and Node Exporter
+  hosts: all
+  become: yes
+  tasks:
+    - name: Download Prometheus
+      get_url:
+        url: https://github.com/prometheus/prometheus/releases/download/v2.54.1/prometheus-2.54.1.linux-amd64.tar.gz
+        dest: /root/download-jar/prometheus-2.54.1.linux-amd64.tar.gz
+
+    - name: Extract Prometheus tar.gz
+      unarchive:
+        src: /root/download-jar/prometheus-2.54.1.linux-amd64.tar.gz
+        dest: /opt/
+        remote_src: yes
+        extra_opts: [--transform, 's/prometheus-2.54.1.linux-amd64/prometheus/']
+
+    - name: Set ownership for Prometheus directory
+      file:
+        path: /opt/prometheus
+        owner: root
+        group: root
+        recurse: yes
+        state: directory
+
+    - name: Copy prometheus.yml template to remote
+      template:
+        src: ../config/prometheus.yml
+        dest: /opt/prometheus/
+
+    - name: Create /usr/local/conviva-node-exporter directory
+      file:
+        path: /usr/local/conviva-node-exporter
+        state: directory
+        mode: '0755'
+
+    - name: Download Node Exporter
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
+        dest: /root/download-jar/node_exporter-1.8.2.linux-amd64.tar.gz
+
+    - name: Extract Node Exporter
+      unarchive:
+        src: /root/download-jar/node_exporter-1.8.2.linux-amd64.tar.gz
+        dest: /opt/
+        remote_src: yes
+        extra_opts: [--transform, 's/node_exporter-1.8.2.linux-amd64/node_exporter/']
+
+    - name: Set ownership for Node Exporter directory
+      file:
+        path: /opt/node_exporter
+        owner: root
+        group: root
+        recurse: yes
+        state: directory

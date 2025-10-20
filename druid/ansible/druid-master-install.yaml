@@ -1,0 +1,91 @@
+---
+- name: Install Druid Master
+  become: yes
+  hosts: all
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  tasks:
+# TODO: need to fix checking logic
+#    - name: Include precondition check
+#      include_tasks: precondition-check.yaml
+
+    - name: Include mysql init
+      include_tasks: mysql-init.yaml
+
+    - name: Check MySQL login
+      command: mysql --host=68.183.62.71 --user=druid --password=m27EbXfV7K#y#ePG --database=druid -e "SELECT 1;"
+      register: mysql_login_check
+      ignore_errors: yes
+
+    - name: Fail if MySQL login failed
+      fail:
+        msg: "MySQL login failed: {{ mysql_login_check.stderr }}"
+      when: mysql_login_check.rc != 0
+
+    - name: Download Apache Druid tarball
+      get_url:
+        url: https://archive.apache.org/dist/druid/28.0.0/apache-druid-28.0.0-bin.tar.gz
+        dest: /root/download-jar/apache-druid-28.0.0-bin.tar.gz
+        mode: 0644
+
+    - name: Extract Apache Druid
+      unarchive:
+        src: /root/download-jar/apache-druid-28.0.0-bin.tar.gz
+        dest: /opt/
+        remote_src: yes
+        extra_opts:
+          - '--transform'
+          - 's/apache-druid-28.0.0/druid-master/'
+
+    - name: Download MySQL Connector
+      get_url:
+        url: https://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.49/mysql-connector-java-5.1.49.jar
+        dest: /root/download-jar/mysql-connector-java-5.1.49.jar
+        mode: 0644
+
+    - name: Copy MySQL Connector JAR to Druid extensions directory
+      copy:
+        src: /root/download-jar/mysql-connector-java-5.1.49.jar
+        dest: /opt/druid-master/extensions/mysql-metadata-storage/
+        mode: '0644'
+        remote_src: yes
+
+    - name: Change ownership of /opt/druid-master directory
+      file:
+        path: /opt/druid-master
+        owner: root
+        group: root
+        recurse: yes
+        state: directory
+
+    - name: Remove old druid configuration files
+      file:
+        path: /opt/druid-master/conf/druid
+        state: absent
+
+    - name: Copy master-cluster configuration files to remote
+      copy:
+        src: ../master-cluster/
+        dest: /opt/druid-master/conf/druid/cluster/
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Copy Hadoop configuration files to Druid cluster
+      copy:
+        src: /opt/hadoop/etc/hadoop/{{ item }}
+        dest: /opt/druid-master/conf/druid/cluster/_common/{{ item }}
+        owner: root
+        group: root
+        mode: '0644'
+        remote_src: yes
+      with_items:
+        - core-site.xml
+        - hdfs-site.xml
+        - mapred-site.xml
+        - yarn-site.xml
+
+    - name: Start Druid master
+      shell: nohup bin/start-cluster-master-no-zk-server > /tmp/start_druid_master.log 2>&1 &
+      args:
+        chdir: /opt/druid-master

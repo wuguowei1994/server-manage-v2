@@ -1,0 +1,240 @@
+---
+- name: Init All Hosts
+  hosts: all
+  become: yes
+  tasks:
+  - name: Update .bashrc
+    lineinfile:
+      path: "{{ ansible_env.HOME }}/.bashrc"
+      state: present
+      create: yes
+      line: "{{ item }}"
+    with_lines: cat ../config/bashrc_config.txt
+
+  - name: Backup /etc/hosts file
+    copy:
+      src: /etc/hosts
+      dest: /etc/hosts-2023-06-05-bak
+      backup: yes
+
+  - name: Remove local network mappings from /etc/hosts
+    lineinfile:
+      path: /etc/hosts
+      state: absent
+      regexp: '^127\.0\.0\.1\s+.*$'
+
+  - name: Ensure file descriptor limits for all users
+    lineinfile:
+      path: /etc/security/limits.conf
+      state: present
+      regexp: '^(\*)\s+(soft|hard)\s+(nofile)\s+\d+'
+      line: "{{ item }}"
+      create: yes
+    loop:
+      - '* hard nofile 65535'
+
+  - name: Append soft nofile limit at end of file
+    lineinfile:
+      path: /etc/security/limits.conf
+      line: '* soft nofile 65535'
+      state: present
+      insertafter: EOF
+      create: yes
+
+  - name: Ensure vm.max_map_count is set
+    lineinfile:
+      path: /etc/sysctl.conf
+      line: 'vm.max_map_count=2000000'
+      state: present
+
+  - name: Apply sysctl settings
+    command: sysctl -p
+
+  - name: Set current session nofile limit
+    shell: ulimit -n 65535
+
+  - name: Disable Transparent Huge Pages
+    lineinfile:
+      path: /etc/rc.local
+      line: "{{ item }}"
+      state: present
+      create: yes
+    loop:
+      - 'echo never > /sys/kernel/mm/transparent_hugepage/enabled'
+      - 'echo never > /sys/kernel/mm/transparent_hugepage/defrag'
+
+  - name: Ensure required packages are installed
+    yum:
+      name:
+        - firewalld
+        - git
+      state: present
+
+  - name: Enable firewalld service to start on boot
+    systemd:
+      name: firewalld
+      enabled: yes
+
+  - name: Start firewalld service
+    systemd:
+      name: firewalld
+      state: started
+
+  - name: Set default zone to public
+    command: firewall-cmd --set-default-zone=drop
+
+  - name: Change interfaces to trusted zone
+    shell: |
+      firewall-cmd --zone=drop --change-interface=eth0 --permanent
+      firewall-cmd --zone=trusted --add-interface=eth1 --permanent
+
+  - name: Create directory download-jar
+    file:
+      path: /root/download-jar/
+      state: directory
+      mode: '0755'
+
+  - name: Download Java 1.8.0_341
+    get_url:
+      url: https://planetone.online/downloads/java/jdk/jdk-8u341-linux-x64.tar.gz
+      dest: /root/download-jar/jdk-8u341-linux-x64.tar.gz
+
+  - name: Extract Java tar.gz
+    unarchive:
+      src: /root/download-jar/jdk-8u341-linux-x64.tar.gz
+      dest: /opt/
+      remote_src: yes
+      mode: '0755'
+
+  - name: Create Java symlink
+    file:
+      src: /opt/jdk1.8.0_341/bin/java
+      dest: /usr/local/bin/java
+      state: link
+
+  - name: Set JAVA_HOME in /etc/environment
+    lineinfile:
+      path: /etc/environment
+      state: present
+      regexp: '^JAVA_HOME='
+      line: 'JAVA_HOME=/opt/jdk1.8.0_341'
+
+  - name: Download Scala RPM
+    get_url:
+      url: https://downloads.lightbend.com/scala/2.12.19/scala-2.12.19.rpm
+      dest: /tmp/scala-2.12.19.rpm
+
+  - name: Install Scala RPM
+    yum:
+      name: /tmp/scala-2.12.19.rpm
+      state: present
+      disable_gpg_check: yes
+
+  # fix error: OpenSSL version mismatch
+  - name: Install openssh-server with yum
+    command: yum install -y openssh-server
+    become: yes
+
+  - name: Install common packages
+    package:
+      name:
+        - wget
+        - vim
+        - java-1.8.0-openjdk-devel
+        - mysql-server
+        - tree
+        - net-tools
+        - perl
+        - python3-pip
+      state: present
+
+  - name: Install development tools and additional libraries
+    dnf:
+      name:
+        - gcc
+        - gcc-c++
+        - make
+        - mariadb-connector-c-devel-3.2.6-1.el9.x86_64
+      state: present
+
+  - name: Install Python packages
+    pip:
+      name:
+        - PyMySQL
+        - cryptography
+      executable: /usr/bin/pip3
+
+  - name: Install digitalocean monitor
+    shell: |
+      curl -sSL https://repos.insights.digitalocean.com/install.sh | bash
+    args:
+      executable: /bin/bash
+
+  - name: Generate SSH key pair
+    command: ssh-keygen -t rsa -b 2048 -f /root/.ssh/id_rsa -N ""
+    args:
+      creates: /root/.ssh/id_rsa
+
+  - name: Ensure .ssh directory has correct permissions
+    file:
+      path: /root/.ssh
+      state: directory
+      mode: '0700'
+
+  - name: Add SSH configuration to disable StrictHostKeyChecking
+    ansible.builtin.lineinfile:
+      path: /root/.ssh/config
+      state: present
+      create: yes
+      line: |
+        Host *
+            StrictHostKeyChecking no
+
+  - name: Set ownership and permissions for SSH config file
+    ansible.builtin.file:
+      path: /root/.ssh/config
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Set hostname
+    hostname:
+      name: "{{ node_name }}"
+    vars:
+      node_name: "{{ hostvars[inventory_hostname]['node_name'] }}"
+
+  - name: Copy trusted_ips.txt to target host
+    copy:
+      src: ../config/firewall_trusted_ips.txt
+      dest: /root/firewall_trusted_ips.txt
+
+  - name: Add source IP to trusted zone
+    shell: |
+      while read -r ip; do
+        firewall-cmd --permanent --zone=trusted --add-source=$ip
+      done < /root/firewall_trusted_ips.txt
+    args:
+      executable: /bin/bash
+
+  - name: Reload firewalld
+    command: firewall-cmd --reload
+
+  - name: Update /etc/hosts
+    lineinfile:
+      path: /etc/hosts
+      state: present
+      line: "{{ hostvars[item].ansible_host }} {{ hostvars[item].node_name }}"
+    with_items: "{{ groups['all-hosts'] }}"
+
+  # update ssh key in all hosts
+  - name: Read public key
+    slurp:
+      src: /root/.ssh/id_rsa.pub
+    register: public_key
+
+  - name: Distribute public key to other hosts
+    authorized_key:
+      user: root
+      key: "{{ public_key['content'] | b64decode }}"
+    with_items: "{{ groups['all-hosts'] }}"
+    delegate_to: "{{ item }}"

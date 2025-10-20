@@ -1,0 +1,37 @@
+- name: Create HDFS directory /user/hadoop
+  command: hdfs dfs -mkdir -p /user/hadoop
+  register: mkdir_result
+  ignore_errors: yes
+
+- name: Check if directory creation was successful
+  fail:
+    msg: "Failed to create /user/hadoop in HDFS."
+  when: mkdir_result.rc != 0
+
+- name: Upload history.txt to HDFS
+  command: hdfs dfs -put -f /root/history.txt /user/hadoop/
+  register: put_result
+  ignore_errors: yes
+
+- name: Check if file upload was successful
+  fail:
+    msg: "Failed to upload history.txt to HDFS."
+  when: put_result.rc != 0
+
+- name: Run YARN example job
+  command: hadoop jar /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.3.1.jar pi 5 10
+  register: yarn_job_result
+  async: 60 # Run the job asynchronously, with a timeout of 60 seconds
+  poll: 5 # Check the status every 5 seconds
+  ignore_errors: yes
+
+- name: Check if YARN job ran successfully
+  fail:
+    msg: "YARN job failed with error: {{ yarn_job_result.stderr }}"
+  when: yarn_job_result.rc != 0
+
+- name: Fail if YARN job did not complete within 60 seconds
+  fail:
+    msg: "YARN job did not complete within the expected time."
+  when: yarn_job_result.finished == False
+  ignore_errors: yes

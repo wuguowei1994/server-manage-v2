@@ -1,0 +1,8 @@
+cluster.name: elasticsearch
+node.name: {{ node_name }}
+http.host: 0.0.0.0
+transport.host: 0.0.0.0
+node.master: true
+node.data: true
+xpack.security.enabled: true
+discovery.type: single-node

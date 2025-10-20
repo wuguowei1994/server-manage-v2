@@ -1,0 +1,100 @@
+---
+- name: Install Hadoop
+  hosts: all
+  become: yes
+  tasks:
+    - name: Set HADOOP variables in .bashrc
+      blockinfile:
+        path: /root/.bashrc
+        block: |
+          export HADOOP_HOME=/opt/hadoop
+          export PATH=${PATH}:${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin
+          export HADOOP_CLASSPATH=`hadoop classpath`
+
+    - name: Set HADOOP variables in .bash_profile
+      lineinfile:
+        path: /root/.bash_profile
+        line: 'PATH=/opt/hadoop/bin:/opt/hadoop/sbin:$PATH'
+        state: present
+
+    - name: Download hadoop-3.3.1.tar.gz
+      get_url:
+        url: https://archive.apache.org/dist/hadoop/common/hadoop-3.3.1/hadoop-3.3.1.tar.gz
+        dest: /root/download-jar/hadoop-3.3.1.tar.gz
+
+    - name: Extract Hadoop tar.gz
+      unarchive:
+        src: /root/download-jar/hadoop-3.3.1.tar.gz
+        dest: /opt/
+        remote_src: yes
+        extra_opts: [--transform, 's/hadoop-3.3.1/hadoop/']
+
+    - name: Set ownership for Hadoop directory
+      file:
+        path: /opt/hadoop
+        owner: root
+        group: root
+        recurse: yes
+        state: directory
+
+    - name: Create folder /opt/hadoop/pid
+      file:
+        path: /opt/hadoop/pid
+        owner: root
+        group: root
+        state: directory
+        mode: '0755'
+      become: yes
+
+    - name: Set Hadoop variables in hadoop-env.sh
+      copy:
+        dest: /opt/hadoop/etc/hadoop/hadoop-env.sh
+        content: |
+          export JAVA_HOME=/opt/jdk1.8.0_341
+          export HADOOP_OS_TYPE=${HADOOP_OS_TYPE:-$(uname -s)}
+          export HDFS_NAMENODE_USER="root"
+          export HDFS_DATANODE_USER="root"
+          export HDFS_SECONDARYNAMENODE_USER="root"
+          export YARN_RESOURCEMANAGER_USER="root"
+          export YARN_NODEMANAGER_USER="root"
+          export HDFS_ZKFC_USER="root"
+          export HADOOP_PID_DIR="/opt/hadoop/pid"
+
+    - name: Copy Hadoop config files
+      copy:
+        src: "{{ item }}"
+        dest: /opt/hadoop/etc/hadoop/
+      loop:
+        - ../config/hdfs-site.xml
+        - ../config/mapred-site.xml
+        - ../config/yarn-site.xml
+        - ../config/core-site.xml
+
+    # mapreduce.jobhistory.webapp.address must bind to 0.0.0.0 in job history node
+    - name: Configure JobHistory webapp address
+      when: ansible_default_ipv4.address == '68.183.62.71'
+      ansible.builtin.replace:
+        path: /opt/hadoop/etc/hadoop/mapred-site.xml
+        regexp: '68.183.62.71:19888'
+        replace: '0.0.0.0:19888'
+
+    - name: Set workers file
+      copy:
+        dest: /opt/hadoop/etc/hadoop/workers
+        content: |
+          165.22.40.133
+          165.227.124.190
+
+    - block:
+        - name: Start hadoop
+          include_tasks: hadoop-start.yaml
+
+        - name: Add Hello World to /root/history.txt
+          ansible.builtin.lineinfile:
+            path: /root/history.txt
+            line: "Hello, World!"
+            create: yes
+
+        - name: Check Hadoop status
+          include_tasks: status-check.yaml
+      when: ansible_default_ipv4.address == '68.183.62.71'

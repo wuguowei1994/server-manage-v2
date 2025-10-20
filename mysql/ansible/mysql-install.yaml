@@ -1,0 +1,36 @@
+---
+- name: Install and configure MySQL
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install MySQL server
+      package:
+        name: mysql-server
+        state: present
+
+    - name: Start and enable MySQL service
+      systemd:
+        name: mysqld
+        state: started
+        enabled: yes
+
+    - name: Upload init SQL
+      copy:
+        src: ../script/mysql_secure_installation.sql
+        dest: /tmp/mysql_secure_installation.sql
+
+    - name: Secure MySQL installation
+      mysql_db:
+        name: mysql
+        state: import
+        target: /tmp/mysql_secure_installation.sql
+
+    - name: Check MySQL version
+      mysql_query:
+        login_user: root
+        login_password: 'owYYGLT14,'
+        query: 'SELECT VERSION();'
+      register: mysql_version
+
+    - debug:
+        var: mysql_version.query_result
